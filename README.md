@@ -25,6 +25,16 @@ Não há comando de build: publique o conteúdo da pasta `site/`.
 - **Cloudflare Pages:** Create application, Pages, conecte o repositório, Root directory `site`, Framework preset `None`, Build command vazio. Sem Git: `npx wrangler pages deploy site`.
 - **GitHub Pages:** publique a pasta `site` com um workflow do GitHub Actions, porque o modo simples só aceita a raiz ou `/docs`.
 
+## Painel do celular (`/painel`)
+O mesmo Worker serve o site estático e, em `/painel`, um painel protegido por senha (código em `worker/`). Os dados vêm do
+bucket R2 `tiktokshop-2026`, preenchido pelo executor local (`python -m app.growth sync` no projeto principal).
+
+- **Testar localmente:** `npm install`, crie `.dev.vars` com `PAINEL_SENHA=...` e `SESSAO_SEGREDO=...` (nunca versionado) e
+  rode `npm run dev` (porta 8771, R2 simulado). Testes: `npm test`.
+- **Publicar:** confira `name` em `wrangler.jsonc` (precisa ser o Worker atual), crie os segredos `PAINEL_SENHA` e
+  `SESSAO_SEGREDO` na Cloudflare e faça o deploy (`npx wrangler deploy` ou push, se o Git estiver conectado).
+- `.assetsignore` impede que `worker/`, `node_modules/` e arquivos de configuração virem páginas públicas.
+
 ## TikTok for Developers
 - **Website URL:** a página inicial publicada.
 - **Privacidade e termos:** `/privacy.html` e `/terms.html`.

@@ -1,0 +1,18 @@
+// Worker do site + painel do celular.
+// ATENÇÃO: "name" precisa ser o nome do Worker que já publica o site no painel da Cloudflare
+// (Workers & Pages). Se for diferente, ajuste antes do primeiro deploy.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "casa-pratica-studio-site",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    // só o painel passa pelo código; o resto continua estático
+    "run_worker_first": ["/painel", "/painel/*"]
+  },
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "tiktokshop-2026" }],
+  "observability": { "enabled": true }
+  // Segredos (nunca neste arquivo): npx wrangler secret put PAINEL_SENHA e SESSAO_SEGREDO
+}

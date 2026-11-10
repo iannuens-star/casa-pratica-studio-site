@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0F766E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Casa Prática">
+<title>Painel Casa Prática</title>
+<link rel="manifest" href="/painel/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/painel/icone.svg">
+<style>
+  :root { --bg:#F7F5F0; --card:#fff; --ink:#1F2933; --muted:#5B6670; --brand:#0F766E; --brand-ink:#fff; --soft:#E6F2F0;
+          --warn:#B54708; --warn-bg:#FEF0C7; --err:#B42318; --err-bg:#FEE4E2; --ok:#067647; --ok-bg:#DCFAE6; --line:#E3DED3; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14181B; --card:#1D2327; --ink:#EEF1F2; --muted:#A3ADB3; --brand:#2DB3A3;
+          --brand-ink:#08201D; --soft:#1F3532; --warn:#FDB022; --warn-bg:#3A2A0A; --err:#F97066; --err-bg:#3B1512; --ok:#47CD89;
+          --ok-bg:#0F2E1E; --line:#2C3439; } }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden; }
+  body { font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding-bottom:calc(76px + env(safe-area-inset-bottom)); }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line);
+           padding:calc(10px + env(safe-area-inset-top)) 16px 10px; display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:17px; margin:0; flex:1; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; white-space:nowrap; }
+  .pill.on { background:var(--ok-bg); color:var(--ok); } .pill.off { background:var(--err-bg); color:var(--err); }
+  .pill.warn { background:var(--warn-bg); color:var(--warn); } .pill.mut { background:var(--line); color:var(--muted); }
+  main { max-width:640px; margin:0 auto; padding:12px 16px; }
+  .banner { margin:0 0 12px; padding:12px 14px; border-radius:12px; font-size:15px; }
+  .banner.err { background:var(--err-bg); color:var(--err); } .banner.warn { background:var(--warn-bg); color:var(--warn); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .grid .card { margin:0; }
+  .k { font-size:13px; color:var(--muted); } .v { font-size:24px; font-weight:700; margin-top:2px; }
+  .small { font-size:13px; color:var(--muted); }
+  h2 { font-size:18px; margin:18px 0 10px; } h3 { font-size:15px; margin:14px 0 6px; }
+  button, .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:48px; padding:0 16px;
+          font:600 16px/1 inherit; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--ink);
+          text-decoration:none; cursor:pointer; width:100%; margin-top:8px; }
+  button.primary, .btn.primary { background:var(--brand); color:var(--brand-ink); border-color:var(--brand); }
+  button.danger { color:var(--err); } button:disabled { opacity:.55; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  input, select, textarea { width:100%; font-size:16px; padding:12px; border-radius:10px; border:1px solid var(--line);
+          background:var(--bg); color:var(--ink); }
+  textarea { min-height:72px; resize:vertical; }
+  label { display:block; font-size:14px; font-weight:600; margin:10px 0 4px; }
+  .chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:8px; scrollbar-width:none; }
+  .chip { flex:0 0 auto; width:auto; min-height:40px; margin:0; padding:0 14px; border-radius:999px; font-size:14px; }
+  .chip[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .item { display:block; width:100%; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:14px;
+          padding:12px 14px; margin-bottom:10px; color:inherit; font:inherit; min-height:auto; }
+  .item .t { font-weight:700; font-size:16px; margin:4px 0 2px; overflow-wrap:anywhere; }
+  video { width:100%; max-height:70vh; background:#000; border-radius:12px; display:block; }
+  ol, ul { padding-left:20px; margin:6px 0; } li { margin:4px 0; overflow-wrap:anywhere; }
+  a { color:var(--brand); overflow-wrap:anywhere; }
+  .cap { white-space:pre-wrap; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px; font-size:15px; overflow-wrap:anywhere; }
+  nav { position:fixed; bottom:0; left:0; right:0; z-index:5; display:flex; background:var(--card); border-top:1px solid var(--line);
+        padding-bottom:env(safe-area-inset-bottom); }
+  nav a { flex:1; text-align:center; padding:10px 4px 12px; font-size:13px; font-weight:600; color:var(--muted); text-decoration:none; }
+  nav a[aria-current="page"] { color:var(--brand); }
+  nav svg { display:block; margin:0 auto 2px; width:24px; height:24px; }
+  .toast { position:fixed; left:16px; right:16px; bottom:calc(86px + env(safe-area-inset-bottom)); z-index:9; max-width:600px; margin:0 auto;
+           background:var(--ink); color:var(--bg); padding:12px 14px; border-radius:12px; font-size:15px; display:none; }
+  .back { width:auto; min-height:40px; margin:0 0 8px; padding:0 12px; }
+  .steps li { margin-bottom:12px; }
+  details summary { cursor:pointer; font-weight:600; padding:6px 0; }
+  .bars { display:flex; align-items:flex-end; gap:6px; height:120px; margin-top:10px; }
+  .bars div { flex:1; background:var(--brand); border-radius:6px 6px 0 0; min-height:4px; position:relative; }
+  .bars span { position:absolute; top:-18px; left:0; right:0; text-align:center; font-size:11px; color:var(--muted); }
+  .bl { display:flex; gap:6px; } .bl span { flex:1; text-align:center; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Casa Prática</h1>
+  <span id="exec" class="pill mut">carregando…</span>
+</header>
+<main id="app" aria-live="polite"></main>
+<div class="toast" id="toast" role="status"></div>
+<nav>
+  <a href="#inicio" data-tab="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/></svg>Início</a>
+  <a href="#videos" data-tab="videos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>Vídeos</a>
+  <a href="#seguidores" data-tab="seguidores"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 11h6M20 8v6"/></svg>Seguidores</a>
+</nav>
+<script>
+"use strict";
+const S = { data: null, erroRede: "", carregadoEm: null, filtro: "revisar", blobs: {} };
+const ROTULO = { idea:"Ideia", researched:"Pesquisada", assets_ready:"Mídia pronta", scripted:"Roteiro pronto",
+  rendered:"Renderizado", needs_review:"Revisar", ready_to_publish:"Pronto para publicar", published:"Publicado",
+  blocked:"Recusado/bloqueado", failed:"Com erro", paused:"Pausado" };
+const COR = { needs_review:"warn", ready_to_publish:"on", published:"mut", blocked:"off", failed:"off" };
+const FILTROS = { revisar:["needs_review"], prontos:["ready_to_publish"], publicados:["published"],
+  erro:["failed","blocked"], todos:null };
+const app = document.getElementById("app");
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])); }
+function quando(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso); if (isNaN(d)) return esc(iso);
+  return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+}
+function dia(iso) { return iso ? iso.split("-").reverse().slice(0, 2).join("/") : "—"; }
+function toast(msg) {
+  const t = document.getElementById("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 3500);
+}
+
+async function api(path, opts = {}) {
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const r = await fetch(path, { credentials: "same-origin", signal: ctl.signal, ...opts,
+      headers: { "X-Painel": "1", ...(opts.body ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) } });
+    if (r.status === 401) { location.replace("/painel"); throw new Error("Sessão expirada."); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.erro || "Erro " + r.status);
+    return d;
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("A conexão demorou demais. Tente de novo.");
+    if (e instanceof TypeError) throw new Error("Sem conexão com a internet.");
+    throw e;
+  } finally { clearTimeout(tm); }
+}
+
+async function carregar() {
+  try {
+    S.data = await api("/painel/api/estado");
+    S.erroRede = ""; S.carregadoEm = new Date();
+  } catch (e) { S.erroRede = e.message; }
+  render();
+}
+
+async function acao(tipo, video_id, dados, botao) {
+  if (botao) botao.disabled = true;
+  try {
+    const d = await api("/painel/api/acao", { method: "POST", body: JSON.stringify({ tipo, video_id, dados }) });
+    toast(d.mensagem || "Registrado.");
+    await carregar();
+    return true;
+  } catch (e) { toast(e.message); if (botao) botao.disabled = false; return false; }
+}
+
+function pendente(vid) { return (S.data?.pendentes || []).filter(p => p.video_id === vid); }
+const TIPO_TXT = { aprovar:"aprovação", recusar:"recusa", nova_versao:"nova versão", publicado:"confirmação de publicação",
+  seguidores:"seguidores", metricas:"métricas", pausar:"pausa", retomar:"retomada" };
+
+function cabecalho() {
+  const ex = S.data?.executor; const el = document.getElementById("exec");
+  if (!ex) { el.className = "pill mut"; el.textContent = "sem dados"; return; }
+  if (ex.online) { el.className = "pill on"; el.textContent = "Computador online"; }
+  else { el.className = "pill off"; el.textContent = "Computador offline"; }
+}
+
+function avisos() {
+  let h = "";
+  if (S.erroRede) h += `<div class="banner err">${esc(S.erroRede)}${S.carregadoEm ? " Mostrando os dados de " + quando(S.carregadoEm.toISOString()) + "." : ""}</div>`;
+  const st = S.data?.estado, ex = S.data?.executor;
+  if (S.data && !st) h += `<div class="banner warn">O computador ainda não enviou nenhum dado. Rode a sincronização nele uma vez.</div>`;
+  else if (ex && !ex.online) h += `<div class="banner warn">O computador não sincroniza há ${ex.minutos_desde_envio} min. Ações feitas aqui ficam guardadas e são aplicadas quando ele voltar.</div>`;
+  if (st?.pausado) h += `<div class="banner warn">Produção pausada.</div>`;
+  const p = S.data?.pendentes || [];
+  if (p.length) h += `<div class="banner warn">${p.length} ação(ões) aguardando o computador: ${p.map(x => TIPO_TXT[x.tipo] || x.tipo).join(", ")}.</div>`;
+  return h;
+}
+
+function telaInicio() {
+  const st = S.data?.estado; if (!st) return "";
+  const f = st.seguidores?.ultimo, c = st.contagem || {};
+  const falta = f ? Math.max(0, st.meta_seguidores - f.seguidores) : null;
+  const job = st.trabalho_em_andamento;
+  const ev = (st.eventos || []).slice(0, 5);
+  return `
+  <div class="card"><div class="k">Próxima ação</div><div style="font-weight:700;margin-top:4px">${esc(st.proxima_acao)}</div></div>
+  <div class="grid">
+    <div class="card"><div class="k">Seguidores</div><div class="v">${f ? f.seguidores : "—"}</div>
+      <div class="small">${f ? "informado em " + quando(f.em) : "nenhum registro"}</div></div>
+    <div class="card"><div class="k">Faltam para ${st.meta_seguidores}</div><div class="v">${falta ?? "—"}</div><div class="small">meta, não garantia</div></div>
+    <div class="card"><div class="k">Para revisar</div><div class="v">${c.needs_review || 0}</div></div>
+    <div class="card"><div class="k">Prontos</div><div class="v">${c.ready_to_publish || 0}</div><div class="small">para publicar</div></div>
+    <div class="card"><div class="k">Em andamento</div><div class="v" style="font-size:16px">${job ? esc(job.job) : "nada"}</div>
+      <div class="small">${job ? "até " + quando(job.until) : "no último envio"}</div></div>
+    <div class="card"><div class="k">Custo registrado</div><div class="v">R$ ${st.custo.registrado_brl.toFixed(2).replace(".", ",")}</div>
+      <div class="small">de R$ ${st.custo.orcamento_brl.toFixed(0)}</div></div>
+  </div>
+  <div class="card small">Último envio do computador: ${quando(st.gerado_em)}. Os números de seguidores são informados à mão, não em tempo real.</div>
+  ${ev.length ? `<h2>Últimas ações aplicadas</h2><div class="card"><ul>${ev.map(e => `<li>${e.ok ? "✓" : "✗"} ${esc(e.resultado)} <span class="small">${quando(e.em)}</span></li>`).join("")}</ul></div>` : ""}
+  <button id="pausa">${st.pausado ? "Retomar produção" : "Pausar produção"}</button>`;
+}
+
+function telaVideos() {
+  const st = S.data?.estado; if (!st) return "";
+  const chips = Object.keys(FILTROS).map(k => `<button class="chip" data-f="${k}" aria-pressed="${S.filtro === k}">${
+    { revisar:"Revisar", prontos:"Prontos", publicados:"Publicados", erro:"Com erro", todos:"Todos" }[k]}</button>`).join("");
+  const lista = st.videos.filter(v => !FILTROS[S.filtro] || FILTROS[S.filtro].includes(v.status));
+  return `<div class="chips">${chips}</div>` + (lista.length ? lista.map(v => `
+    <button class="item" data-v="${v.id}">
+      <span class="pill ${COR[v.status] || "mut"}">${ROTULO[v.status] || esc(v.status)}</span>
+      ${pendente(v.id).length ? '<span class="pill warn">aguardando computador</span>' : ""}
+      <div class="t">${esc(v.titulo)}</div>
+      <div class="small">${dia(v.dia)} · vaga ${v.vaga} · ${esc(v.pilar)}${v.duracao_s ? " · " + Math.round(v.duracao_s) + " s" : ""}</div>
+    </button>`).join("") : `<div class="card small">Nenhum vídeo neste filtro.</div>`);
+}
+
+function podeCompartilhar() {
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File([new Uint8Array(1)], "t.mp4", { type: "video/mp4" })] })); }
+  catch (_) { return false; }
+}
+
+function telaDetalhe(id) {
+  const v = S.data?.estado?.videos.find(x => x.id === id);
+  if (!v) return `<button class="back" data-go="#videos">‹ Voltar</button><div class="card">Vídeo não encontrado.</div>`;
+  const temVideo = !!v.arquivos?.["video.mp4"];
+  const src = `/painel/api/video/${v.id}/video.mp4`;
+  const pend = pendente(v.id);
+  let acoes = "";
+  if (pend.length) acoes += `<div class="banner warn">Aguardando o computador aplicar: ${pend.map(p => TIPO_TXT[p.tipo]).join(", ")}.</div>`;
+  if (v.status === "needs_review") acoes += `
+    <div class="card"><h3 style="margin-top:0">Sua revisão</h3>
+      <div class="small">Assista com som e confira o checklist abaixo antes de aprovar.</div>
+      <label for="nota">Observação (opcional)</label><textarea id="nota" maxlength="500" placeholder="Ex.: trocar a primeira imagem"></textarea>
+      <button class="primary" data-a="aprovar">Aprovar</button>
+      <div class="row"><button data-a="nova_versao">Pedir nova versão</button><button class="danger" data-a="recusar">Recusar</button></div></div>`;
+  if (v.status === "ready_to_publish") acoes += `
+    <div class="card"><h3 style="margin-top:0">Publicar no TikTok</h3><ol class="steps">
+      <li>Salve o vídeo no celular:
+        ${podeCompartilhar() ? `<button id="prep" class="primary">Preparar para compartilhar</button><button id="share" class="primary" style="display:none">Compartilhar vídeo</button>` : ""}
+        <a class="btn${podeCompartilhar() ? "" : " primary"}" href="${src}?baixar=1" download="casa-pratica-${v.id}.mp4">Baixar MP4</a>
+        <div class="small">No iPhone, o download vai para o app Arquivos (Transferências); use "Salvar vídeo" em Compartilhar para mandar à galeria. No Android, fica em Downloads.</div></li>
+      <li>Copie o texto da publicação: <button id="copiar">Copiar legenda</button></li>
+      <li>Abra o app do TikTok, toque em <b>+</b>, escolha o vídeo, cole a legenda e ative o rótulo de <b>conteúdo gerado por IA</b>.
+        <a class="btn" href="https://www.tiktok.com/" target="_blank" rel="noopener">Abrir TikTok</a></li>
+      <li>Depois de publicar, volte aqui e confirme:
+        <label for="url">Link do post (opcional)</label><input id="url" type="url" inputmode="url" placeholder="https://www.tiktok.com/@casaspraticabr/video/…">
+        <button class="primary" data-a="publicado">Já publiquei no TikTok</button></li>
+    </ol></div>`;
+  if (v.status === "published") acoes += `
+    <div class="card"><h3 style="margin-top:0">Publicado ${quando(v.publicado_em)}</h3>
+      ${v.post_url ? `<a href="${esc(v.post_url)}" target="_blank" rel="noopener">${esc(v.post_url)}</a>` : `<div class="small">Sem link registrado.</div>`}
+      <h3>Registrar métricas</h3><div class="small">Copie do TikTok Studio. Deixe vazio o que não aparecer.</div>
+      <label for="jan">Janela</label><select id="jan"><option value="24h">24 horas</option><option value="48h">48 horas</option><option value="7d">7 dias</option></select>
+      ${[["views","Visualizações"],["avg_watch_s","Tempo médio (s)"],["completion_pct","Assistiram até o fim (%)"],["shares","Compartilhamentos"],
+         ["saves","Salvamentos"],["profile_visits","Visitas ao perfil"],["followers_attributed","Seguidores do vídeo"]]
+        .map(([k, t]) => `<label for="m_${k}">${t}</label><input id="m_${k}" inputmode="decimal" autocomplete="off">`).join("")}
+      <button class="primary" data-a="metricas">Salvar métricas</button>
+      ${Object.entries(v.metricas || {}).map(([j, m]) => `<div class="small" style="margin-top:8px">${j}: ${m.views ?? "—"} views, ${m.saves ?? "—"} salvos, ${m.shares ?? "—"} compart. (${quando(m.taken_at)})</div>`).join("")}
+    </div>`;
+  if (v.status === "failed" || v.status === "blocked") acoes += `
+    <div class="card">${v.erro ? `<div class="banner err">${esc(v.erro)}</div>` : ""}
+      <label for="nota">O que mudar (opcional)</label><textarea id="nota" maxlength="500"></textarea>
+      <button data-a="nova_versao">Pedir nova versão</button></div>`;
+  return `<button class="back" data-go="#videos">‹ Voltar</button>
+  <span class="pill ${COR[v.status] || "mut"}">${ROTULO[v.status] || esc(v.status)}</span>
+  <h2 style="margin-top:8px">${esc(v.titulo)}</h2>
+  <div class="small" style="margin-bottom:10px">${dia(v.dia)} · vaga ${v.vaga} · ${esc(v.pilar)}${v.duracao_s ? " · " + Math.round(v.duracao_s) + " s" : ""}</div>
+  ${temVideo ? `<video controls playsinline preload="metadata" src="${src}"></video>` : `<div class="card small">O arquivo do vídeo ainda não foi enviado pelo computador.</div>`}
+  ${acoes}
+  <div class="card"><h3 style="margin-top:0">Legenda</h3><div class="cap">${esc(v.legenda || "—")}</div>
+    ${v.status !== "ready_to_publish" && v.legenda ? `<button id="copiar">Copiar legenda</button>` : ""}</div>
+  <div class="card">
+    <details open><summary>Roteiro</summary><ol>${(v.roteiro || []).map(l => `<li>${esc(l)}</li>`).join("")}</ol></details>
+    <details><summary>Hipótese do criativo</summary><p>${esc(v.hipotese || "—")}</p></details>
+    <details><summary>Checklist</summary><ul>${(v.checklist || []).map(c => `<li>${esc(c)}</li>`).join("") || "<li>—</li>"}</ul></details>
+    <details><summary>Fontes</summary><ul>${(v.fontes || []).map(f => `<li><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.titulo)}</a> <span class="small">consultado ${quando(f.consultado_em)}</span></li>`).join("")}</ul></details>
+    <details><summary>Mídias e licenças</summary><ul>${(v.midias || []).map(m => `<li>${esc(m.provider)} · ${esc(m.license)}${m.author ? " · " + esc(m.author) : ""}
+      ${m.page_url ? ` · <a href="${esc(m.page_url)}" target="_blank" rel="noopener">origem</a>` : ""}${m.attribution ? `<div class="small">${esc(m.attribution)}</div>` : ""}</li>`).join("")
+      || `<li>${v.composicao_original ? "Composição gráfica original (sem mídia externa)." : "—"}</li>`}
+      <li>Narração: ${v.narracao ? esc(v.narracao.voice + " · licença " + v.narracao.status) : "—"}</li><li>Música: nenhuma</li></ul></details>
+    <details><summary>Histórico</summary><ul>${(v.historico || []).map(h => `<li><span class="small">${quando(h.em)}</span> ${esc(h.msg)}</li>`).join("") || "<li>—</li>"}</ul></details>
+  </div>`;
+}
+
+function telaSeguidores() {
+  const st = S.data?.estado; if (!st) return "";
+  const f = st.seguidores || {}, u = f.ultimo;
+  const dias = (f.por_dia || []).slice(-10), max = Math.max(1, ...dias.map(d => d.seguidores));
+  return `
+  <div class="card"><div class="k">Último valor informado</div><div class="v">${u ? u.seguidores : "—"}</div>
+    <div class="small">${u ? `em ${quando(u.em)} · origem: ${esc(u.origem)} (${esc(u.confianca)})` : "nenhum registro"}. Não é tempo real.</div>
+    ${u ? `<div class="small" style="margin-top:6px">Crescimento líquido desde ${quando(f.desde)}: ${f.crescimento_liquido >= 0 ? "+" : ""}${f.crescimento_liquido} · faltam ${f.faltam_para_meta} para ${st.meta_seguidores}</div>` : ""}</div>
+  <div class="card"><label for="seg" style="margin-top:0">Seguidores agora (veja no seu perfil do TikTok)</label>
+    <input id="seg" type="number" inputmode="numeric" min="0" step="1" placeholder="Ex.: 25">
+    <button class="primary" id="salvaSeg">Atualizar seguidores</button></div>
+  ${dias.length > 1 ? `<div class="card"><div class="k">Por dia (último valor de cada dia)</div>
+    <div class="bars">${dias.map(d => `<div style="height:${Math.max(4, Math.round(100 * d.seguidores / max))}%"><span>${d.seguidores}</span></div>`).join("")}</div>
+    <div class="bl">${dias.map(d => `<span>${dia(d.dia)}</span>`).join("")}</div></div>` : ""}`;
+}
+
+function rota() { return (location.hash || "#inicio").slice(1); }
+
+function render() {
+  cabecalho();
+  const r = rota(); const tab = r.startsWith("video/") ? "videos" : r;
+  document.querySelectorAll("nav a").forEach(a => a.setAttribute("aria-current", a.dataset.tab === tab ? "page" : "false"));
+  // não redesenha o detalhe enquanto um vídeo toca ou um campo está em edição
+  const ativo = document.activeElement;
+  const tocando = [...app.querySelectorAll("video")].some(v => !v.paused);
+  if (render.rotaAnterior === r && (tocando || (ativo && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName)))) { return; }
+  render.rotaAnterior = r;
+  let h = avisos();
+  if (!S.data) h += S.erroRede ? "" : `<div class="card small">Carregando…</div>`;
+  else if (r.startsWith("video/")) h += telaDetalhe(Number(r.split("/")[1]));
+  else if (r === "videos") h += telaVideos();
+  else if (r === "seguidores") h += telaSeguidores();
+  else h += telaInicio();
+  if (S.erroRede) h += `<button id="tentar" class="primary">Tentar de novo</button>`;
+  app.innerHTML = h;
+}
+
+function nota() { const n = document.getElementById("nota"); return n ? n.value.trim() : ""; }
+
+app.addEventListener("click", async (e) => {
+  const b = e.target.closest("button, a"); if (!b) return;
+  const id = Number(rota().split("/")[1]);
+  if (b.dataset.v) { location.hash = "#video/" + b.dataset.v; return; }
+  if (b.dataset.go) { location.hash = b.dataset.go; return; }
+  if (b.dataset.f) { S.filtro = b.dataset.f; render.rotaAnterior = null; render(); return; }
+  if (b.id === "tentar") { carregar(); return; }
+  if (b.id === "pausa") { const p = S.data.estado.pausado; if (confirm(p ? "Retomar a produção?" : "Pausar a produção de vídeos?")) acao(p ? "retomar" : "pausar", null, {}, b); return; }
+  if (b.id === "copiar") {
+    const v = S.data.estado.videos.find(x => x.id === id);
+    try { await navigator.clipboard.writeText(v.legenda); toast("Legenda copiada."); }
+    catch (_) { const t = document.createElement("textarea"); t.value = v.legenda; document.body.appendChild(t); t.select();
+      const ok = document.execCommand("copy"); t.remove(); toast(ok ? "Legenda copiada." : "Não deu para copiar: selecione o texto da legenda."); }
+    return;
+  }
+  if (b.id === "prep") {
+    b.disabled = true; b.textContent = "Baixando…";
+    try {
+      const r = await fetch(`/painel/api/video/${id}/video.mp4`, { credentials: "same-origin" });
+      if (!r.ok) throw new Error();
+      S.blobs[id] = new File([await r.blob()], `casa-pratica-${id}.mp4`, { type: "video/mp4" });
+      b.style.display = "none"; document.getElementById("share").style.display = "";
+    } catch (_) { b.disabled = false; b.textContent = "Preparar para compartilhar"; toast("Falha ao baixar. Use o botão Baixar MP4."); }
+    return;
+  }
+  if (b.id === "share") {
+    const file = S.blobs[id];
+    if (!file || !navigator.canShare({ files: [file] })) { toast("Este navegador não compartilha arquivos. Use Baixar MP4."); return; }
+    try { await navigator.share({ files: [file] }); toast("Compartilhado. Lembre de confirmar aqui depois de publicar."); }
+    catch (err) { if (err.name !== "AbortError") toast("Não deu para compartilhar. Use Baixar MP4."); }
+    return;
+  }
+  if (b.id === "salvaSeg") {
+    const n = document.getElementById("seg").value.trim();
+    if (!/^\d+$/.test(n)) { toast("Digite só o número."); return; }
+    if (await acao("seguidores", null, { seguidores: Number(n) }, b)) document.getElementById("seg").value = "";
+    return;
+  }
+  const a = b.dataset.a; if (!a) return;
+  if (a === "aprovar") { acao(a, id, { nota: nota() }, b); return; }
+  if (a === "recusar") { if (confirm("Recusar este vídeo? Ele sai da fila de publicação.")) acao(a, id, { nota: nota() }, b); return; }
+  if (a === "nova_versao") { if (confirm("Pedir nova versão? O computador gera novo roteiro e nova renderização.")) acao(a, id, { nota: nota() }, b); return; }
+  if (a === "publicado") {
+    if (!confirm("Confirma que o vídeo já está publicado no TikTok?")) return;
+    acao(a, id, { url: document.getElementById("url").value.trim() }, b); return;
+  }
+  if (a === "metricas") {
+    const d = { janela: document.getElementById("jan").value };
+    ["views","avg_watch_s","completion_pct","shares","saves","profile_visits","followers_attributed"].forEach(k => d[k] = document.getElementById("m_" + k).value.trim());
+    acao(a, id, d, b);
+  }
+});
+
+window.addEventListener("hashchange", () => { render.rotaAnterior = null; render(); window.scrollTo(0, 0); });
+window.addEventListener("online", carregar);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) carregar(); });
+setInterval(() => { if (!document.hidden) carregar(); }, 60000);
+carregar();
+</script>
+</body>
+</html>

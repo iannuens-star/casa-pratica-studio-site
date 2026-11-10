@@ -1,0 +1,16 @@
+{
+  "name": "casa-pratica-studio-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8771",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "wrangler": "4.150.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261006.1": true
+  }
+}
