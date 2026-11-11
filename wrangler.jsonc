@@ -1,9 +1,8 @@
 // Worker do site + painel do celular.
-// ATENÇÃO: "name" precisa ser o nome do Worker que já publica o site no painel da Cloudflare
-// (Workers & Pages). Se for diferente, ajuste antes do primeiro deploy.
+// "name" é o Worker que já serve app.casapraticastudio.com.br (domínio personalizado).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "casa-pratica-studio-site",
+  "name": "casa-pratica-studio",
   "main": "worker/index.js",
   "compatibility_date": "2026-10-01",
   "assets": {
