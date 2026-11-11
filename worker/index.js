@@ -1,8 +1,14 @@
 // Painel do celular da Casa Prática Studio.
 // Tudo fora de /painel continua sendo o site estático (binding ASSETS).
 // Dados: bucket R2 (binding BUCKET), escrito pelo executor local (python -m app.growth sync).
-// Segredos (wrangler secret ou painel da Cloudflare): PAINEL_SENHA (obrigatório) e SESSAO_SEGREDO (opcional).
-// Nada disso vai para o navegador.
+// Autorização (duas formas; nunca as duas misturadas):
+//  1. Cloudflare Access (preferida): ACCESS_TEAM_DOMAIN, ACCESS_AUD e ACCESS_EMAILS definidos (wrangler secret).
+//     O Worker valida o JWT do Access em TODA rota /painel (documentação oficial: cabeçalho
+//     Cf-Access-Jwt-Assertion, RS256, emissor = domínio da equipe, audiência = AUD do aplicativo) e
+//     confere o e-mail. Sem JWT válido: 403, inclusive vindo de workers.dev ou de URLs de prévia.
+//  2. Senha (transição, enquanto o Access não estiver ligado): PAINEL_SENHA e SESSAO_SEGREDO (opcional).
+// Configuração parcial do Access = 503 (falha fechada). Nada disso vai para o navegador.
+import { accessMode, accessIdentity, readJson, cspFor } from "./seguranca.js";
 import { PAGE, LOGIN } from "./ui.js";
 import { parseRange } from "./range.js";
 
@@ -15,8 +21,10 @@ const FILES = {
   "caption.txt": "text/plain; charset=utf-8",
   "subtitles.srt": "application/x-subrip; charset=utf-8",
 };
-const TIPOS = new Set(["aprovar", "recusar", "nova_versao", "publicado", "seguidores", "metricas", "pausar", "retomar"]);
-const SEM_VIDEO = new Set(["seguidores", "pausar", "retomar"]);
+const TIPOS = new Set(["aprovar", "recusar", "nova_versao", "publicado", "seguidores", "metricas", "pausar", "retomar", "template"]);
+// "template": decisão sobre um teste de template (A/B). Não toca a fila nem marca nada como publicado.
+const SEM_VIDEO = new Set(["seguidores", "pausar", "retomar", "template"]);
+const TESTE_RE = /^[a-z0-9-]{1,60}$/;
 const enc = new TextEncoder();
 
 export default {
@@ -36,21 +44,35 @@ export default {
 
 async function route(request, env, url) {
   const path = url.pathname.replace(/\/+$/, "") || "/painel";
-  if (!env.PAINEL_SENHA || !env.BUCKET) {
-    return html("<h1>Painel ainda não configurado</h1><p>Falta o segredo PAINEL_SENHA ou o bucket.</p>", 503);
+  const modo = accessMode(env);
+  if (modo === "partial") {
+    return html("<h1>Painel bloqueado</h1><p>Configuração do Cloudflare Access incompleta.</p>", 503);
   }
-  // SESSAO_SEGREDO é opcional: sem ele, a chave de sessão deriva da senha (trocar a senha encerra as sessões)
-  if (!env.SESSAO_SEGREDO) env = { ...env, SESSAO_SEGREDO: await hmac(env.PAINEL_SENHA, "casa-pratica:sessao:v1") };
+  if (!env.BUCKET || (modo === "off" && !env.PAINEL_SENHA)) {
+    return html("<h1>Painel ainda não configurado</h1><p>Falta o bucket ou a forma de autorização.</p>", 503);
+  }
   if (request.method === "POST" && !sameOrigin(request, url)) {
     return json({ erro: "Origem não permitida." }, 403);
   }
-  if (path === "/painel/manifest.webmanifest") return manifest();
-  if (path === "/painel/icone.svg") return icon();
-  if (path === "/painel/api/login" && request.method === "POST") return login(request, env);
 
-  const ok = await session(request, env);
-  if (path === "/painel") return ok ? html(PAGE) : html(LOGIN);
-  if (!ok) return json({ erro: "Sessão expirada. Entre de novo." }, 401);
+  if (modo === "on") {
+    // Access: nenhuma rota do painel (nem manifesto/ícone) responde sem JWT válido e e-mail autorizado.
+    const quem = await accessIdentity(request, env);
+    if (!quem) return json({ erro: "Acesso negado." }, 403);
+    if (path === "/painel/manifest.webmanifest") return manifest();
+    if (path === "/painel/icone.svg") return icon();
+    if (path === "/painel") return html(PAGE);
+    if (path === "/painel/api/login" || path === "/painel/api/sair") return json({ erro: "Não encontrado." }, 404);
+  } else {
+    // SESSAO_SEGREDO é opcional: sem ele, a chave de sessão deriva da senha (trocar a senha encerra as sessões)
+    if (!env.SESSAO_SEGREDO) env = { ...env, SESSAO_SEGREDO: await hmac(env.PAINEL_SENHA, "casa-pratica:sessao:v1") };
+    if (path === "/painel/manifest.webmanifest") return manifest();
+    if (path === "/painel/icone.svg") return icon();
+    if (path === "/painel/api/login" && request.method === "POST") return login(request, env);
+    const ok = await session(request, env);
+    if (path === "/painel") return ok ? html(PAGE) : html(LOGIN);
+    if (!ok) return json({ erro: "Sessão expirada. Entre de novo." }, 401);
+  }
 
   if (path === "/painel/api/sair" && request.method === "POST") {
     return json({ ok: true }, 200, { "Set-Cookie": `${COOKIE}=; Path=/painel; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
@@ -58,7 +80,13 @@ async function route(request, env, url) {
   if (path === "/painel/api/estado" && request.method === "GET") return estado(env);
   if (path === "/painel/api/acao" && request.method === "POST") return acao(request, env);
   const m = path.match(/^\/painel\/api\/video\/(\d{1,6})\/(video\.mp4|caption\.txt|subtitles\.srt)$/);
-  if (m && (request.method === "GET" || request.method === "HEAD")) return arquivo(request, env, m[1], m[2], url);
+  if (m && (request.method === "GET" || request.method === "HEAD")) {
+    return arquivo(request, env, `${P}videos/${m[1]}/${m[2]}`, m[2], `casa-pratica-${m[1]}-${m[2]}`, url);
+  }
+  const t = path.match(/^\/painel\/api\/teste\/([a-z0-9-]{1,60})-([AB])\/(video\.mp4|caption\.txt|subtitles\.srt)$/);
+  if (t && (request.method === "GET" || request.method === "HEAD")) {
+    return arquivo(request, env, `${P}testes/${t[1]}-${t[2]}/${t[3]}`, t[3], `teste-${t[1]}-${t[2]}-${t[3]}`, url);
+  }
   return json({ erro: "Não encontrado." }, 404);
 }
 
@@ -98,7 +126,7 @@ async function login(request, env) {
   const tries = Number((await (await env.BUCKET.get(rlKey))?.text()) || 0);
   if (tries >= 8) return json({ erro: "Muitas tentativas. Espere uma hora." }, 429);
   let body = {};
-  try { body = await request.json(); } catch { /* corpo inválido */ }
+  try { body = await readJson(request); } catch (e) { if (e instanceof RangeError) return json({ erro: "Pedido grande demais." }, 413); }
   const senha = String(body.senha || "");
   if (!senha || !(await safeEqual(senha, env.PAINEL_SENHA, env.SESSAO_SEGREDO))) {
     await env.BUCKET.put(rlKey, String(tries + 1));
@@ -140,7 +168,7 @@ function cleanNum(v) {
 
 async function acao(request, env) {
   let body;
-  try { body = await request.json(); } catch { return json({ erro: "Pedido inválido." }, 400); }
+  try { body = await readJson(request); } catch (e) { return json({ erro: e instanceof RangeError ? "Pedido grande demais." : "Pedido inválido." }, e instanceof RangeError ? 413 : 400); }
   const tipo = String(body.tipo || "");
   if (!TIPOS.has(tipo)) return json({ erro: "Ação desconhecida." }, 400);
   const vid = body.video_id === undefined || body.video_id === null ? null : Number(body.video_id);
@@ -170,6 +198,15 @@ async function acao(request, env) {
     }
     if (dados.completion_pct !== null && dados.completion_pct > 100) return json({ erro: "Conclusão acima de 100%." }, 400);
   }
+  if (tipo === "template") {
+    const teste = String(d.teste || "");
+    if (!TESTE_RE.test(teste)) return json({ erro: "Teste inválido." }, 400);
+    if (!["aprovar", "recusar"].includes(d.decisao)) return json({ erro: "Decisão inválida." }, 400);
+    if (d.decisao === "aprovar" && !["A", "B"].includes(d.versao)) return json({ erro: "Escolha a versão A ou B." }, 400);
+    dados.teste = teste;
+    dados.decisao = d.decisao;
+    dados.versao = d.decisao === "aprovar" ? d.versao : null;
+  }
   // limite simples contra cliques repetidos: 60 ações por hora
   const pend = await env.BUCKET.list({ prefix: P + "inbox/", limit: 100 });
   if (pend.objects.length >= 60) return json({ erro: "Muitas ações aguardando o computador. Espere a sincronização." }, 429);
@@ -182,8 +219,7 @@ async function acao(request, env) {
   return json({ ok: true, id, mensagem: "Registrado. O computador aplica na próxima sincronização." });
 }
 
-async function arquivo(request, env, vid, name, url) {
-  const key = `${P}videos/${vid}/${name}`;
+async function arquivo(request, env, key, name, fname, url) {
   const range = request.headers.get("Range");
   const head = await env.BUCKET.head(key);
   if (!head) return json({ erro: "Arquivo ainda não enviado pelo computador." }, 404);
@@ -196,9 +232,9 @@ async function arquivo(request, env, vid, name, url) {
     ETag: head.httpEtag,
   });
   if (url.searchParams.get("baixar") === "1") {
-    headers.set("Content-Disposition", `attachment; filename="casa-pratica-${vid}-${name}"`);
+    headers.set("Content-Disposition", `attachment; filename="${fname}"`);
   } else {
-    headers.set("Content-Disposition", `inline; filename="casa-pratica-${vid}-${name}"`);
+    headers.set("Content-Disposition", `inline; filename="${fname}"`);
   }
   if (request.method === "HEAD") {
     headers.set("Content-Length", String(size));
@@ -226,6 +262,9 @@ const SEC = {
   "Referrer-Policy": "no-referrer",
   "X-Frame-Options": "DENY",
   "Cache-Control": "no-store",
+  "Strict-Transport-Security": "max-age=31536000",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "Cross-Origin-Opener-Policy": "same-origin",
 };
 
 function json(data, status = 200, extra = {}) {
@@ -235,16 +274,10 @@ function json(data, status = 200, extra = {}) {
   });
 }
 
-function html(body, status = 200) {
+async function html(body, status = 200) {
   return new Response(body, {
     status,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      ...SEC,
-      "Content-Security-Policy":
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-    },
+    headers: { "Content-Type": "text/html; charset=utf-8", ...SEC, "Content-Security-Policy": await cspFor(body) },
   });
 }
 
@@ -259,11 +292,11 @@ function manifest() {
     theme_color: "#0F766E",
     lang: "pt-BR",
     icons: [{ src: "/painel/icone.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
-  }), { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
+  }), { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" } });
 }
 
 function icon() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0F766E"/>` +
     `<path d="M256 112 112 232v168h104V296h80v104h104V232z" fill="#F7F5F0"/></svg>`;
-  return new Response(svg, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } });
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff" } });
 }

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Casa Prática">
 <title>Painel Casa Prática</title>
-<link rel="manifest" href="/painel/manifest.webmanifest">
+<link rel="manifest" href="/painel/manifest.webmanifest" crossorigin="use-credentials">
 <link rel="apple-touch-icon" href="/painel/icone.svg">
 <style>
   :root { --bg:#F7F5F0; --card:#fff; --ink:#1F2933; --muted:#5B6670; --brand:#0F766E; --brand-ink:#fff; --soft:#E6F2F0;
@@ -68,6 +68,12 @@
   .bars div { flex:1; background:var(--brand); border-radius:6px 6px 0 0; min-height:4px; position:relative; }
   .bars span { position:absolute; top:-18px; left:0; right:0; text-align:center; font-size:11px; color:var(--muted); }
   .bl { display:flex; gap:6px; } .bl span { flex:1; text-align:center; font-size:11px; color:var(--muted); }
+  .lado { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .lado > div { min-width:0; } .lado video { max-height:none; aspect-ratio:9/16; object-fit:contain; }
+  .lado .btn, .lado button { min-height:44px; font-size:14px; padding:0 8px; }
+  .vt { font-weight:800; font-size:15px; margin:0 0 6px; }
+  table.dif { width:100%; border-collapse:collapse; font-size:14px; } .dif td, .dif th { border-top:1px solid var(--line); padding:6px 4px; vertical-align:top; text-align:left; overflow-wrap:anywhere; }
+  .dif th { color:var(--muted); font-weight:600; width:34%; }
 </style>
 </head>
 <body>
@@ -80,6 +86,7 @@
 <nav>
   <a href="#inicio" data-tab="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/></svg>Início</a>
   <a href="#videos" data-tab="videos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>Vídeos</a>
+  <a href="#testes" data-tab="testes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="8" height="16" rx="2"/><rect x="14" y="4" width="8" height="16" rx="2"/></svg>Testes</a>
   <a href="#seguidores" data-tab="seguidores"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 11h6M20 8v6"/></svg>Seguidores</a>
 </nav>
 <script>
@@ -94,6 +101,8 @@ const FILTROS = { revisar:["needs_review"], prontos:["ready_to_publish"], public
 const app = document.getElementById("app");
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])); }
+// Links vindos de dados (fontes, mídias, post) só podem ser https: — bloqueia javascript:, data: etc.
+function url(u) { try { const x = new URL(String(u || "")); return x.protocol === "https:" ? esc(x.href) : "#"; } catch (_) { return "#"; } }
 function quando(iso) {
   if (!iso) return "—";
   const d = new Date(iso); if (isNaN(d)) return esc(iso);
@@ -141,7 +150,7 @@ async function acao(tipo, video_id, dados, botao) {
 
 function pendente(vid) { return (S.data?.pendentes || []).filter(p => p.video_id === vid); }
 const TIPO_TXT = { aprovar:"aprovação", recusar:"recusa", nova_versao:"nova versão", publicado:"confirmação de publicação",
-  seguidores:"seguidores", metricas:"métricas", pausar:"pausa", retomar:"retomada" };
+  seguidores:"seguidores", metricas:"métricas", pausar:"pausa", retomar:"retomada", template:"decisão de template" };
 
 function cabecalho() {
   const ex = S.data?.executor; const el = document.getElementById("exec");
@@ -176,8 +185,8 @@ function telaInicio() {
     <div class="card"><div class="k">Faltam para ${st.meta_seguidores}</div><div class="v">${falta ?? "—"}</div><div class="small">meta, não garantia</div></div>
     <div class="card"><div class="k">Para revisar</div><div class="v">${c.needs_review || 0}</div></div>
     <div class="card"><div class="k">Prontos</div><div class="v">${c.ready_to_publish || 0}</div><div class="small">para publicar</div></div>
-    <div class="card"><div class="k">Em andamento</div><div class="v" style="font-size:16px">${job ? esc(job.job) : "nada"}</div>
-      <div class="small">${job ? "até " + quando(job.until) : "no último envio"}</div></div>
+    <div class="card"><div class="k">Em andamento</div><div class="v" style="font-size:16px">${st.renderizando ? "renderizando vídeo " + st.renderizando.video_id : (job ? esc(job.job) : "nada")}</div>
+      <div class="small">${st.renderizando ? "desde " + quando(st.renderizando.desde) : (job ? "até " + quando(job.until) : "no último envio")}</div></div>
     <div class="card"><div class="k">Custo registrado</div><div class="v">R$ ${st.custo.registrado_brl.toFixed(2).replace(".", ",")}</div>
       <div class="small">de R$ ${st.custo.orcamento_brl.toFixed(0)}</div></div>
   </div>
@@ -234,7 +243,7 @@ function telaDetalhe(id) {
     </ol></div>`;
   if (v.status === "published") acoes += `
     <div class="card"><h3 style="margin-top:0">Publicado ${quando(v.publicado_em)}</h3>
-      ${v.post_url ? `<a href="${esc(v.post_url)}" target="_blank" rel="noopener">${esc(v.post_url)}</a>` : `<div class="small">Sem link registrado.</div>`}
+      ${v.post_url ? `<a href="${url(v.post_url)}" target="_blank" rel="noopener">${esc(v.post_url)}</a>` : `<div class="small">Sem link registrado.</div>`}
       <h3>Registrar métricas</h3><div class="small">Copie do TikTok Studio. Deixe vazio o que não aparecer.</div>
       <label for="jan">Janela</label><select id="jan"><option value="24h">24 horas</option><option value="48h">48 horas</option><option value="7d">7 dias</option></select>
       ${[["views","Visualizações"],["avg_watch_s","Tempo médio (s)"],["completion_pct","Assistiram até o fim (%)"],["shares","Compartilhamentos"],
@@ -259,12 +268,84 @@ function telaDetalhe(id) {
     <details open><summary>Roteiro</summary><ol>${(v.roteiro || []).map(l => `<li>${esc(l)}</li>`).join("")}</ol></details>
     <details><summary>Hipótese do criativo</summary><p>${esc(v.hipotese || "—")}</p></details>
     <details><summary>Checklist</summary><ul>${(v.checklist || []).map(c => `<li>${esc(c)}</li>`).join("") || "<li>—</li>"}</ul></details>
-    <details><summary>Fontes</summary><ul>${(v.fontes || []).map(f => `<li><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.titulo)}</a> <span class="small">consultado ${quando(f.consultado_em)}</span></li>`).join("")}</ul></details>
+    <details><summary>Fontes</summary><ul>${(v.fontes || []).map(f => `<li><a href="${url(f.url)}" target="_blank" rel="noopener">${esc(f.titulo)}</a> <span class="small">consultado ${quando(f.consultado_em)}</span></li>`).join("")}</ul></details>
     <details><summary>Mídias e licenças</summary><ul>${(v.midias || []).map(m => `<li>${esc(m.provider)} · ${esc(m.license)}${m.author ? " · " + esc(m.author) : ""}
-      ${m.page_url ? ` · <a href="${esc(m.page_url)}" target="_blank" rel="noopener">origem</a>` : ""}${m.attribution ? `<div class="small">${esc(m.attribution)}</div>` : ""}</li>`).join("")
+      ${m.page_url ? ` · <a href="${url(m.page_url)}" target="_blank" rel="noopener">origem</a>` : ""}${m.attribution ? `<div class="small">${esc(m.attribution)}</div>` : ""}</li>`).join("")
       || `<li>${v.composicao_original ? "Composição gráfica original (sem mídia externa)." : "—"}</li>`}
       <li>Narração: ${v.narracao ? esc(v.narracao.voice + " · licença " + v.narracao.status) : "—"}</li><li>Música: nenhuma</li></ul></details>
     <details><summary>Histórico</summary><ul>${(v.historico || []).map(h => `<li><span class="small">${quando(h.em)}</span> ${esc(h.msg)}</li>`).join("") || "<li>—</li>"}</ul></details>
+  </div>`;
+}
+
+function testeTxt(t) {
+  const d = t.decisao;
+  if (!d) return '<span class="pill warn">aguardando sua escolha</span>';
+  return d.decisao === "aprovar" ? `<span class="pill on">versão ${esc(d.versao)} aprovada</span>` : '<span class="pill off">as duas recusadas</span>';
+}
+
+function telaTestes() {
+  const ts = S.data?.estado?.testes || [];
+  return `<div class="card small">Testes de modelo de vídeo: a mesma pauta e a mesma narração, montadas de duas formas. Escolher aqui só define o modelo dos próximos vídeos. Nada é publicado.</div>` +
+    (ts.length ? ts.map(t => `<button class="item" data-t="${esc(t.teste)}">${testeTxt(t)}
+      ${(S.data.pendentes || []).some(p => p.tipo === "template") ? '<span class="pill warn">aguardando computador</span>' : ""}
+      <div class="t">${esc(t.pauta)}</div><div class="small">versões ${Object.keys(t.versoes).sort().join(" e ")}</div></button>`).join("")
+      : `<div class="card small">Nenhum teste enviado pelo computador.</div>`);
+}
+
+function fmtS(x) { return x == null ? "—" : String(Math.round(x * 10) / 10).replace(".", ",") + " s"; }
+
+function telaTeste(slug) {
+  const t = (S.data?.estado?.testes || []).find(x => x.teste === slug);
+  if (!t) return `<button class="back" data-go="#testes">‹ Voltar</button><div class="card">Teste não encontrado.</div>`;
+  const vs = ["A", "B"].filter(v => t.versoes[v]);
+  const src = (v, n) => `/painel/api/teste/${t.teste}-${v}/${n}`;
+  const col = (v) => { const x = t.versoes[v]; const tem = !!x.arquivos?.["video.mp4"]; return `<div>
+    <div class="vt">Versão ${v}</div>
+    ${tem ? `<video controls playsinline preload="metadata" src="${src(v, "video.mp4")}"></video>` : `<div class="card small">Vídeo ainda não enviado.</div>`}
+    ${tem ? `<a class="btn" href="${src(v, "video.mp4")}?baixar=1" download="teste-${esc(t.teste)}-${v}.mp4">Baixar MP4</a>` : ""}
+    <button data-copia="${v}">Copiar legenda</button></div>`; };
+  const linha = (rot, f) => `<tr><th>${rot}</th>${vs.map(v => `<td>${f(t.versoes[v]) ?? "—"}</td>`).join("")}</tr>`;
+  const q = (x) => { if (!x.qualidade) return "—"; const ok = x.qualidade.filter(i => i.ok === true).length, ruins = x.qualidade.filter(i => i.ok === false);
+    return `${ok} ok${ruins.length ? ` · <b>${ruins.length} falhou</b>` : ""}` + ruins.map(i => `<div class="small">✗ ${esc(i.item)}</div>`).join(""); };
+  const qLista = (x) => (x.qualidade || []).map(i => `<li>${i.ok === null ? "👁" : i.ok ? "✓" : "✗"} ${esc(i.item)}<div class="small">${esc(i.detalhe)}</div></li>`).join("");
+  const vis = (x, i) => { const r = x.roteiro[i]?.visual; if (!r) return "—"; if (typeof r === "string") return "foto: " + esc(r);
+    return r.tipo === "3d" ? `3D: ${esc(r.etapa)}${r.rotulo ? " · “" + esc(r.rotulo) + "”" : ""}` : "foto: " + esc(r.src); };
+  const base = t.versoes[vs[0]].roteiro || [];
+  const pend = (S.data.pendentes || []).some(p => p.tipo === "template");
+  return `<button class="back" data-go="#testes">‹ Voltar</button> ${testeTxt(t)}
+  <h2 style="margin-top:8px">${esc(t.pauta)}</h2>
+  <div class="lado">${vs.map(col).join("")}</div>
+  <div class="small" style="margin:-4px 0 12px">Toque no vídeo e use tela cheia para ver no tamanho real. Baixar não marca nada como publicado.</div>
+  <div class="card"><h3 style="margin-top:0">Diferenças</h3><table class="dif">
+    <tr><th></th>${vs.map(v => `<td><b>${v}</b></td>`).join("")}</tr>
+    ${linha("Proposta", x => esc(x.hipotese))}
+    ${linha("Motor", x => esc(x.motor))}
+    ${linha("Quadros/s", x => x.arquivo?.fps ? String(Math.round(x.arquivo.fps)) : "—")}
+    ${linha("Duração", x => fmtS(x.arquivo?.duration_s))}
+    ${linha("Tempo de render", x => fmtS(x.tempo_s?.render))}
+    ${linha("Tamanho", x => x.arquivos?.["video.mp4"]?.bytes ? (x.arquivos["video.mp4"].bytes / 1048576).toFixed(1).replace(".", ",") + " MB" : "—")}
+    ${linha("Custo", x => x.custo_brl == null ? "—" : "R$ " + x.custo_brl.toFixed(2).replace(".", ","))}
+    ${linha("Efeitos sonoros", x => x.efeitos_sonoros ? "sim (síntese própria)" : "não")}
+    ${linha("Controle de qualidade", q)}
+  </table></div>
+  ${t.decisao ? `<div class="card small">Decisão registrada ${quando(t.decisao.em)}${t.decisao.nota ? ": " + esc(t.decisao.nota) : "."}</div>` : ""}
+  <div class="card"><h3 style="margin-top:0">Sua escolha</h3>
+    ${pend ? `<div class="banner warn">Uma decisão aguarda o computador.</div>` : ""}
+    <div class="small">Aprovar escolhe o modelo para os próximos vídeos do calendário. Nada é publicado.</div>
+    <label for="nota">Observação (opcional)</label><textarea id="nota" maxlength="500" placeholder="Ex.: B, mas com legenda menor"></textarea>
+    <div class="row">${vs.map(v => `<button class="primary" data-tv="${v}">Aprovar ${v}</button>`).join("")}</div>
+    <button class="danger" data-tv="recusar">Recusar as duas</button></div>
+  <div class="card">
+    <details open><summary>Roteiro (igual nas duas) e imagem de cada fala</summary><ol>${base.map((r, i) => `<li>${esc(r.fala)}
+      <div class="small">${vs.map(v => `${v}: ${vis(t.versoes[v], i)}`).join(" · ")}</div><div class="small">base: ${esc(r.base)}</div></li>`).join("")}</ol></details>
+    <details><summary>Fonte e evidências</summary>${t.fonte ? `<p><a href="${url(t.fonte.url)}" target="_blank" rel="noopener">${esc(t.fonte.titulo)}</a>
+      <span class="small">${esc(t.fonte.revisao || "")}</span></p>` : ""}<ol>${(t.evidencias || []).map(e => `<li class="small">${esc(e)}</li>`).join("")}</ol></details>
+    ${vs.map(v => { const x = t.versoes[v]; return `<details><summary>Mídias e licenças · ${v}</summary><ul>${(x.midias || []).map(m => `<li>${esc(m.provider)} · ${esc(m.license)}${m.author ? " · " + esc(m.author) : ""}
+      ${m.page_url ? ` · <a href="${url(m.page_url)}" target="_blank" rel="noopener">origem</a>` : ""}${m.attribution ? `<div class="small">${esc(m.attribution)}</div>` : ""}</li>`).join("")}
+      ${x.composicao_original ? `<li>${esc(x.composicao_original)}</li>` : ""}
+      <li>Narração: ${x.narracao ? esc(x.narracao.voice + " · licença " + x.narracao.status) : "—"}</li><li>Música: nenhuma</li></ul></details>`; }).join("")}
+    ${vs.map(v => `<details><summary>Controle de qualidade · ${v}</summary><ul style="list-style:none;padding-left:0">${qLista(t.versoes[v]) || "<li>—</li>"}</ul></details>`).join("")}
+    ${vs.map(v => `<details><summary>Legenda · ${v}</summary><div class="cap">${esc(t.versoes[v].legenda || "—")}</div></details>`).join("")}
   </div>`;
 }
 
@@ -288,7 +369,7 @@ function rota() { return (location.hash || "#inicio").slice(1); }
 
 function render() {
   cabecalho();
-  const r = rota(); const tab = r.startsWith("video/") ? "videos" : r;
+  const r = rota(); const tab = r.startsWith("video/") ? "videos" : r.startsWith("teste/") ? "testes" : r;
   document.querySelectorAll("nav a").forEach(a => a.setAttribute("aria-current", a.dataset.tab === tab ? "page" : "false"));
   // não redesenha o detalhe enquanto um vídeo toca ou um campo está em edição
   const ativo = document.activeElement;
@@ -300,6 +381,8 @@ function render() {
   else if (r.startsWith("video/")) h += telaDetalhe(Number(r.split("/")[1]));
   else if (r === "videos") h += telaVideos();
   else if (r === "seguidores") h += telaSeguidores();
+  else if (r === "testes") h += telaTestes();
+  else if (r.startsWith("teste/")) h += telaTeste(decodeURIComponent(r.slice(6)));
   else h += telaInicio();
   if (S.erroRede) h += `<button id="tentar" class="primary">Tentar de novo</button>`;
   app.innerHTML = h;
@@ -312,6 +395,21 @@ app.addEventListener("click", async (e) => {
   const id = Number(rota().split("/")[1]);
   if (b.dataset.v) { location.hash = "#video/" + b.dataset.v; return; }
   if (b.dataset.go) { location.hash = b.dataset.go; return; }
+  if (b.dataset.t) { location.hash = "#teste/" + b.dataset.t; return; }
+  if (b.dataset.copia || b.dataset.tv) {
+    const t = (S.data.estado.testes || []).find(x => x.teste === decodeURIComponent(rota().slice(6)));
+    if (!t) return;
+    if (b.dataset.copia) {
+      const txt = t.versoes[b.dataset.copia]?.legenda || "";
+      try { await navigator.clipboard.writeText(txt); toast("Legenda copiada."); }
+      catch (_) { toast("Não deu para copiar: abra 'Legenda' abaixo e selecione o texto."); }
+      return;
+    }
+    const v = b.dataset.tv;
+    if (v === "recusar") { if (confirm("Recusar as duas versões? Nenhum modelo novo será usado.")) acao("template", null, { teste: t.teste, decisao: "recusar", nota: nota() }, b); return; }
+    if (confirm(`Aprovar a versão ${v} como modelo dos próximos vídeos? Nada é publicado.`)) acao("template", null, { teste: t.teste, decisao: "aprovar", versao: v, nota: nota() }, b);
+    return;
+  }
   if (b.dataset.f) { S.filtro = b.dataset.f; render.rotaAnterior = null; render(); return; }
   if (b.id === "tentar") { carregar(); return; }
   if (b.id === "pausa") { const p = S.data.estado.pausado; if (confirm(p ? "Retomar a produção?" : "Pausar a produção de vídeos?")) acao(p ? "retomar" : "pausar", null, {}, b); return; }
