@@ -178,7 +178,8 @@ async function acao(request, env) {
   if (d.nota) dados.nota = String(d.nota).slice(0, 500);
   if (tipo === "publicado") {
     const u = String(d.url || "").trim();
-    if (u && !/^https:\/\/(www\.|vm\.|m\.)?tiktok\.com\/\S{1,300}$/.test(u)) {
+    // vm. e vt. são os links curtos de "compartilhar" do app (ex.: https://vt.tiktok.com/ZSpHbkfy5/)
+    if (u && !/^https:\/\/(www\.|vm\.|vt\.|m\.)?tiktok\.com\/\S{1,300}$/.test(u)) {
       return json({ erro: "O link precisa ser do tiktok.com (ou deixe vazio)." }, 400);
     }
     dados.url = u;
