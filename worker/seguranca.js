@@ -59,7 +59,7 @@ export async function cspFor(body) {
     hashes.push(`'sha256-${btoa(String.fromCharCode(...new Uint8Array(d)))}'`);
   }
   const csp = `default-src 'none'; script-src ${hashes.join(" ") || "'none'"}; style-src 'self' 'unsafe-inline'; ` +
-    "img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; manifest-src 'self'; " +
+    "img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; " +
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
   CSP.set(body, csp);
   return csp;

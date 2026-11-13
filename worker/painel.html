@@ -9,7 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Casa Prática">
 <title>Painel Casa Prática</title>
 <link rel="manifest" href="/painel/manifest.webmanifest" crossorigin="use-credentials">
-<link rel="apple-touch-icon" href="/painel/icone.svg">
+<link rel="apple-touch-icon" href="/assets/painel-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/painel-192.png">
 <style>
   :root { --bg:#F7F5F0; --card:#fff; --ink:#1F2933; --muted:#5B6670; --brand:#0F766E; --brand-ink:#fff; --soft:#E6F2F0;
           --warn:#B54708; --warn-bg:#FEF0C7; --err:#B42318; --err-bg:#FEE4E2; --ok:#067647; --ok-bg:#DCFAE6; --line:#E3DED3; }
@@ -182,7 +183,7 @@ function cardTiktok(v) {
     <button data-a="agora">Aprovar e publicar agora</button>
     <div class="small">O envio sai na próxima sincronização (até 10 min). Se o TikTok pedir login ou verificação, o computador para e avisa aqui.</div></div>`;
 }
-const TIPO_TXT = { agendar:"envio ao TikTok", cancelar_agendamento:"cancelamento do envio", aprovar:"aprovação", recusar:"recusa", nova_versao:"nova versão", publicado:"confirmação de publicação",
+const TIPO_TXT = { teste_aviso:"aviso de teste", agendar:"envio ao TikTok", cancelar_agendamento:"cancelamento do envio", aprovar:"aprovação", recusar:"recusa", nova_versao:"nova versão", publicado:"confirmação de publicação",
   seguidores:"seguidores", metricas:"métricas", pausar:"pausa", retomar:"retomada", template:"decisão de template" };
 
 function cabecalho() {
@@ -225,8 +226,68 @@ function telaInicio() {
   </div>
   <div class="card small">Último envio do computador: ${quando(st.gerado_em)}. Os números de seguidores são informados à mão, não em tempo real.</div>
   ${ev.length ? `<h2>Últimas ações aplicadas</h2><div class="card"><ul>${ev.map(e => `<li>${e.ok ? "✓" : "✗"} ${esc(e.resultado)} <span class="small">${quando(e.em)}</span></li>`).join("")}</ul></div>` : ""}
+  ${cardApp(st)}
   <button id="pausa">${st.pausado ? "Retomar produção" : "Pausar produção"}</button>`;
 }
+
+// ---------------------------------------------------------------- app instalado e avisos (Web Push)
+const ehIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+function instalado() { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; }
+function suportaAvisos() { return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function cardApp(st) {
+  const chave = st.push && st.push.chave_publica;
+  let h = `<div class="card"><h3 style="margin-top:0">App e avisos no celular</h3>`;
+  if (!instalado()) h += ehIOS
+    ? `<div class="small">Para instalar no iPhone: abra esta página no <b>Safari</b>, toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>. Depois abra pelo ícone novo para ativar os avisos (o iPhone só envia avisos para o app instalado, iOS 16.4 ou mais novo).</div>`
+    : `${S.instalar ? `<button id="instalar" class="primary">Instalar o app</button>` : ""}<div class="small">No Android, se o botão não aparecer, use o menu ⋮ do Chrome e toque em <b>Instalar app</b> (ou Adicionar à tela inicial).</div>`;
+  else h += `<div class="small">App instalado ✓</div>`;
+  if (!suportaAvisos()) h += `<div class="small">${ehIOS && !instalado() ? "Os avisos aparecem depois de instalar." : "Este navegador não aceita avisos."}</div>`;
+  else if (!chave) h += `<div class="small">O computador ainda não enviou a chave dos avisos. Espere a próxima sincronização.</div>`;
+  else if (Notification.permission === "denied") h += `<div class="banner err">Avisos bloqueados neste aparelho. Libere nas configurações de notificação do app ou do navegador.</div>`;
+  else h += `<button id="avisos" class="${S.inscrito ? "" : "primary"}">${S.inscrito ? "Avisos ativados ✓ (renovar)" : "Ativar avisos de erro"}</button>`;
+  if (S.inscrito) h += `<button id="testeAviso">Enviar aviso de teste</button><button id="desativar">Desativar avisos neste aparelho</button>`;
+  return h + `<div class="small">Aparelhos com avisos: ${(st.push && st.push.inscritos) || 0}. O computador só avisa quando algo dá errado: renderização, envio ao TikTok (inclusive pedido de login ou verificação) ou a rotina do dia. O teste chega na próxima sincronização (até 10 min).</div></div>`;
+}
+function b64u(s) {
+  const r = atob((s + "=".repeat((4 - s.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(r, c => c.charCodeAt(0));
+}
+async function registroSW() {
+  const reg = await navigator.serviceWorker.register("/painel/sw.js", { scope: "/painel" });
+  await navigator.serviceWorker.ready;
+  return reg;
+}
+async function checarInscricao() {
+  if (!suportaAvisos()) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/painel");
+    S.inscrito = !!(reg && await reg.pushManager.getSubscription() && Notification.permission === "granted");
+  } catch (_) { S.inscrito = false; }
+  render();
+}
+async function ativarAvisos(b) {
+  b.disabled = true;
+  try {
+    if (await Notification.requestPermission() !== "granted") { toast("Sem permissão para avisos."); return; }
+    const reg = await registroSW();
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(S.data.estado.push.chave_publica) });
+    const d = await api("/painel/api/push", { method: "POST", body: JSON.stringify(sub.toJSON()) });
+    S.inscrito = true; toast(d.mensagem || "Avisos ativados."); render();
+  } catch (e) { toast("Não deu para ativar os avisos: " + (e.message || e)); }
+  finally { b.disabled = false; }
+}
+async function desativarAvisos(b) {
+  b.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/painel");
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) { await api("/painel/api/push", { method: "DELETE", body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+    S.inscrito = false; toast("Avisos desativados neste aparelho."); render();
+  } catch (e) { toast(e.message || String(e)); b.disabled = false; }
+}
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); S.instalar = e; render(); });
+window.addEventListener("appinstalled", () => { S.instalar = null; toast("App instalado. Abra pelo ícone e ative os avisos."); render(); });
 
 function telaVideos() {
   const st = S.data?.estado; if (!st) return "";
@@ -429,6 +490,10 @@ app.addEventListener("click", async (e) => {
   const id = Number(rota().split("/")[1]);
   if (b.dataset.v) { location.hash = "#video/" + b.dataset.v; return; }
   if (b.dataset.go) { location.hash = b.dataset.go; return; }
+  if (b.id === "instalar" && S.instalar) { S.instalar.prompt(); S.instalar.userChoice.finally(() => { S.instalar = null; render(); }); return; }
+  if (b.id === "avisos") { ativarAvisos(b); return; }
+  if (b.id === "desativar") { if (confirm("Desativar os avisos neste aparelho?")) desativarAvisos(b); return; }
+  if (b.id === "testeAviso") { acao("teste_aviso", null, {}, b); return; }
   if (b.dataset.t) { location.hash = "#teste/" + b.dataset.t; return; }
   if (b.dataset.copia || b.dataset.tv) {
     const t = (S.data.estado.testes || []).find(x => x.teste === decodeURIComponent(rota().slice(6)));
@@ -509,7 +574,7 @@ window.addEventListener("hashchange", () => { render.rotaAnterior = null; render
 window.addEventListener("online", carregar);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) carregar(); });
 setInterval(() => { if (!document.hidden) carregar(); }, 60000);
-carregar();
+carregar().then(checarInscricao);
 </script>
 </body>
 </html>

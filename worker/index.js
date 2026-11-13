@@ -22,10 +22,13 @@ const FILES = {
   "subtitles.srt": "application/x-subrip; charset=utf-8",
 };
 const TIPOS = new Set(["aprovar", "recusar", "nova_versao", "publicado", "seguidores", "metricas", "pausar", "retomar", "template",
-  "agendar", "cancelar_agendamento"]);
+  "agendar", "cancelar_agendamento", "teste_aviso"]);
 // "agendar": aprovação com horário; o computador envia ao TikTok Studio (agora ou programado). Validação final no executor.
 // "template": decisão sobre um teste de template (A/B). Não toca a fila nem marca nada como publicado.
-const SEM_VIDEO = new Set(["seguidores", "pausar", "retomar", "template"]);
+const SEM_VIDEO = new Set(["seguidores", "pausar", "retomar", "template", "teste_aviso"]);
+// Serviços de push aceitos (endpoint da inscrição Web Push): Google/Chrome, Mozilla, Apple, Microsoft.
+const PUSH_HOSTS = /^(fcm\.googleapis\.com|[a-z0-9.-]+\.push\.services\.mozilla\.com|[a-z0-9.-]*push\.apple\.com|[a-z0-9.-]+\.notify\.windows\.com)$/;
+const B64U = /^[A-Za-z0-9_-]+$/;
 const TESTE_RE = /^[a-z0-9-]{1,60}$/;
 const enc = new TextEncoder();
 
@@ -53,7 +56,7 @@ async function route(request, env, url) {
   if (!env.BUCKET || (modo === "off" && !env.PAINEL_SENHA)) {
     return html("<h1>Painel ainda não configurado</h1><p>Falta o bucket ou a forma de autorização.</p>", 503);
   }
-  if (request.method === "POST" && !sameOrigin(request, url)) {
+  if (request.method !== "GET" && request.method !== "HEAD" && !sameOrigin(request, url)) {
     return json({ erro: "Origem não permitida." }, 403);
   }
 
@@ -63,6 +66,7 @@ async function route(request, env, url) {
     if (!quem) return json({ erro: "Acesso negado." }, 403);
     if (path === "/painel/manifest.webmanifest") return manifest();
     if (path === "/painel/icone.svg") return icon();
+    if (path === "/painel/sw.js") return serviceWorker();
     if (path === "/painel") return html(PAGE);
     if (path === "/painel/api/login" || path === "/painel/api/sair") return json({ erro: "Não encontrado." }, 404);
   } else {
@@ -70,6 +74,7 @@ async function route(request, env, url) {
     if (!env.SESSAO_SEGREDO) env = { ...env, SESSAO_SEGREDO: await hmac(env.PAINEL_SENHA, "casa-pratica:sessao:v1") };
     if (path === "/painel/manifest.webmanifest") return manifest();
     if (path === "/painel/icone.svg") return icon();
+    if (path === "/painel/sw.js") return serviceWorker();
     if (path === "/painel/api/login" && request.method === "POST") return login(request, env);
     const ok = await session(request, env);
     if (path === "/painel") return ok ? html(PAGE) : html(LOGIN);
@@ -81,6 +86,7 @@ async function route(request, env, url) {
   }
   if (path === "/painel/api/estado" && request.method === "GET") return estado(env);
   if (path === "/painel/api/acao" && request.method === "POST") return acao(request, env);
+  if (path === "/painel/api/push" && (request.method === "POST" || request.method === "DELETE")) return push(request, env);
   const m = path.match(/^\/painel\/api\/video\/(\d{1,6})\/(video\.mp4|caption\.txt|subtitles\.srt)$/);
   if (m && (request.method === "GET" || request.method === "HEAD")) {
     return arquivo(request, env, `${P}videos/${m[1]}/${m[2]}`, m[2], `casa-pratica-${m[1]}-${m[2]}`, url);
@@ -310,8 +316,70 @@ function manifest() {
     background_color: "#F7F5F0",
     theme_color: "#0F766E",
     lang: "pt-BR",
-    icons: [{ src: "/painel/icone.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+    id: "/painel",
+    description: "Revisar, aprovar e programar os vídeos do Casa Prática; avisos de erro do computador.",
+    icons: [
+      { src: "/assets/painel-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/assets/painel-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/assets/painel-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/painel/icone.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+    ],
   }), { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" } });
+}
+
+// Service worker do app instalado: só mostra os avisos enviados pelo computador (Web Push) e abre o painel no toque.
+// Sem cache e sem interceptar requisições (o Access continua valendo em tudo).
+const SW = `self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { corpo: e.data ? e.data.text() : "" }; }
+  const url = typeof d.url === "string" && d.url.startsWith("/painel") ? d.url : "/painel";
+  e.waitUntil(self.registration.showNotification(String(d.titulo || "Casa Prática"), {
+    body: String(d.corpo || ""), icon: "/assets/painel-192.png", badge: "/assets/painel-192.png",
+    data: { url }, tag: url, renotify: true }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/painel";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((ws) => {
+    for (const w of ws) { if (w.url.includes("/painel") && "focus" in w) { w.navigate(url); return w.focus(); } }
+    return self.clients.openWindow(url);
+  }));
+});`;
+
+function serviceWorker() {
+  return new Response(SW, { headers: { "Content-Type": "text/javascript; charset=utf-8", "Service-Worker-Allowed": "/painel",
+    "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" } });
+}
+
+// Inscrição Web Push do aparelho (só endpoint e chaves públicas; nada secreto). O computador lê em painel/push/.
+async function push(request, env) {
+  let body;
+  try { body = await readJson(request); } catch (e) { return json({ erro: "Pedido inválido." }, 400); }
+  const endpoint = String(body.endpoint || "");
+  let host = "";
+  try { const u = new URL(endpoint); host = u.protocol === "https:" ? u.hostname : ""; } catch (_) { host = ""; }
+  if (!host || !PUSH_HOSTS.test(host) || endpoint.length > 1000) return json({ erro: "Serviço de avisos não reconhecido." }, 400);
+  const d = await crypto.subtle.digest("SHA-256", enc.encode(endpoint));
+  const key = `${P}push/${[...new Uint8Array(d)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("")}.json`;
+  if (request.method === "DELETE") {
+    await env.BUCKET.delete(key);
+    return json({ ok: true, mensagem: "Avisos desativados neste aparelho." });
+  }
+  const k = body.keys || {};
+  const p256dh = String(k.p256dh || ""), auth = String(k.auth || "");
+  if (!B64U.test(p256dh) || p256dh.length < 80 || p256dh.length > 100 || !B64U.test(auth) || auth.length < 16 || auth.length > 32) {
+    return json({ erro: "Inscrição inválida." }, 400);
+  }
+  const atuais = await env.BUCKET.list({ prefix: P + "push/", limit: 20 });
+  if (atuais.objects.length >= 10 && !atuais.objects.some((o) => o.key === key)) {
+    return json({ erro: "Limite de 10 aparelhos com avisos." }, 429);
+  }
+  await env.BUCKET.put(key, JSON.stringify({ endpoint, keys: { p256dh, auth }, em: new Date().toISOString() }), {
+    httpMetadata: { contentType: "application/json" },
+  });
+  return json({ ok: true, mensagem: "Avisos ativados neste aparelho." });
 }
 
 function icon() {
