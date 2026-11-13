@@ -21,7 +21,9 @@ const FILES = {
   "caption.txt": "text/plain; charset=utf-8",
   "subtitles.srt": "application/x-subrip; charset=utf-8",
 };
-const TIPOS = new Set(["aprovar", "recusar", "nova_versao", "publicado", "seguidores", "metricas", "pausar", "retomar", "template"]);
+const TIPOS = new Set(["aprovar", "recusar", "nova_versao", "publicado", "seguidores", "metricas", "pausar", "retomar", "template",
+  "agendar", "cancelar_agendamento"]);
+// "agendar": aprovação com horário; o computador envia ao TikTok Studio (agora ou programado). Validação final no executor.
 // "template": decisão sobre um teste de template (A/B). Não toca a fila nem marca nada como publicado.
 const SEM_VIDEO = new Set(["seguidores", "pausar", "retomar", "template"]);
 const TESTE_RE = /^[a-z0-9-]{1,60}$/;
@@ -198,6 +200,22 @@ async function acao(request, env) {
       dados[k] = n;
     }
     if (dados.completion_pct !== null && dados.completion_pct > 100) return json({ erro: "Conclusão acima de 100%." }, 400);
+  }
+  if (tipo === "agendar") {
+    if (!["agora", "programar"].includes(d.modo)) return json({ erro: "Escolha Publicar agora ou Programar." }, 400);
+    dados.modo = d.modo;
+    if (d.modo === "programar") {
+      const q = String(d.quando || "");
+      // hora de Brasília, como o campo datetime-local do painel; minutos de 5 em 5 (regra do TikTok)
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(q) || Number(q.slice(14, 16)) % 5) {
+        return json({ erro: "Data e hora inválidas (minutos de 5 em 5)." }, 400);
+      }
+      const t = Date.parse(q + ":00-03:00");
+      const agora = Date.now();
+      if (!(t >= agora + 20 * 60e3)) return json({ erro: "Programe com pelo menos 20 minutos de antecedência." }, 400);
+      if (t > agora + 20 * 864e5) return json({ erro: "O TikTok aceita programar até ~3 semanas à frente." }, 400);
+      dados.quando = q;
+    }
   }
   if (tipo === "template") {
     const teste = String(d.teste || "");

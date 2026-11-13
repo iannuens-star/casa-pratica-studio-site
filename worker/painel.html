@@ -149,7 +149,40 @@ async function acao(tipo, video_id, dados, botao) {
 }
 
 function pendente(vid) { return (S.data?.pendentes || []).filter(p => p.video_id === vid); }
-const TIPO_TXT = { aprovar:"aprovação", recusar:"recusa", nova_versao:"nova versão", publicado:"confirmação de publicação",
+const AG_TXT = { pendente:"na fila do computador", enviando:"enviando ao TikTok", enviado:"no TikTok", publicado:"publicado",
+  erro:"precisa de atenção", cancelado:"cancelado" };
+const AG_COR = { pendente:"warn", enviando:"warn", enviado:"on", publicado:"mut", erro:"off", cancelado:"mut" };
+function agendaDe(v) { return (v.tiktok && v.tiktok.agenda) || null; }
+function pillsTiktok(v) {
+  const ag = agendaDe(v); let h = "";
+  if (ag && ag.estado !== "cancelado") h += `<span class="pill ${AG_COR[ag.estado] || "mut"}">${ag.modo === "programar" ? "programado " + quando(ag.quando) : "publicar agora"} · ${AG_TXT[ag.estado] || esc(ag.estado)}</span>`;
+  if (v.tiktok && v.tiktok.rascunho_em && v.status !== "published") h += '<span class="pill mut">rascunho no TikTok</span>';
+  return h;
+}
+function minimoProg() {  // agora + 25 min, arredondado para 5 min, no horário de Brasília (campo sem fuso)
+  const t = new Date(Date.now() + 25 * 60e3 - 3 * 3600e3); t.setUTCMinutes(Math.ceil(t.getUTCMinutes() / 5) * 5, 0, 0);
+  return t.toISOString().slice(0, 16);
+}
+function cardTiktok(v) {
+  if (!["needs_review", "ready_to_publish"].includes(v.status)) return "";
+  const ag = agendaDe(v);
+  const ativo = ag && ["pendente", "enviando", "enviado"].includes(ag.estado);
+  let h = `<div class="card"><h3 style="margin-top:0">Publicar no TikTok pelo computador</h3>`;
+  if (ag) h += `<div class="banner ${ag.estado === "erro" ? "err" : "warn"}">${ag.modo === "programar" ? "Programado para " + quando(ag.quando) : "Publicar agora"}: ${esc(ag.mensagem || AG_TXT[ag.estado] || "")}</div>`;
+  if (ativo) {
+    if (ag.estado === "pendente") h += `<button class="danger" data-a="cancelar_agendamento">Cancelar antes do envio</button>`;
+    else h += `<div class="small">Já está no TikTok Studio. Para mudar ou cancelar, use o TikTok Studio.</div>`;
+    return h + `</div>`;
+  }
+  const min = minimoProg();
+  const max = new Date(Date.now() + 20 * 864e5 - 3 * 3600e3).toISOString().slice(0, 16);
+  return h + `<div class="small">Aprovar aqui autoriza o computador a enviar <b>este</b> vídeo ao TikTok com a legenda acima, o selo de conteúdo gerado por IA ligado e "Divulgue o conteúdo" desligado. Horário de Brasília. Máximo de 2 por dia.</div>
+    <label for="quando">Data e hora (minutos de 5 em 5)</label><input id="quando" type="datetime-local" step="300" min="${min}" max="${max}" value="${min}">
+    <button class="primary" data-a="programar">Aprovar e programar</button>
+    <button data-a="agora">Aprovar e publicar agora</button>
+    <div class="small">O envio sai na próxima sincronização (até 10 min). Se o TikTok pedir login ou verificação, o computador para e avisa aqui.</div></div>`;
+}
+const TIPO_TXT = { agendar:"envio ao TikTok", cancelar_agendamento:"cancelamento do envio", aprovar:"aprovação", recusar:"recusa", nova_versao:"nova versão", publicado:"confirmação de publicação",
   seguidores:"seguidores", metricas:"métricas", pausar:"pausa", retomar:"retomada", template:"decisão de template" };
 
 function cabecalho() {
@@ -203,7 +236,7 @@ function telaVideos() {
   return `<div class="chips">${chips}</div>` + (lista.length ? lista.map(v => `
     <button class="item" data-v="${v.id}">
       <span class="pill ${COR[v.status] || "mut"}">${ROTULO[v.status] || esc(v.status)}</span>
-      ${pendente(v.id).length ? '<span class="pill warn">aguardando computador</span>' : ""}
+      ${pendente(v.id).length ? '<span class="pill warn">aguardando computador</span>' : ""}${pillsTiktok(v)}
       <div class="t">${esc(v.titulo)}</div>
       <div class="small">${dia(v.dia)} · vaga ${v.vaga} · ${esc(v.pilar)}${v.duracao_s ? " · " + Math.round(v.duracao_s) + " s" : ""}</div>
     </button>`).join("") : `<div class="card small">Nenhum vídeo neste filtro.</div>`);
@@ -222,6 +255,7 @@ function telaDetalhe(id) {
   const pend = pendente(v.id);
   let acoes = "";
   if (pend.length) acoes += `<div class="banner warn">Aguardando o computador aplicar: ${pend.map(p => TIPO_TXT[p.tipo]).join(", ")}.</div>`;
+  acoes += cardTiktok(v);
   if (v.status === "needs_review") acoes += `
     <div class="card"><h3 style="margin-top:0">Sua revisão</h3>
       <div class="small">Assista com som e confira o checklist abaixo antes de aprovar.</div>
@@ -229,7 +263,7 @@ function telaDetalhe(id) {
       <button class="primary" data-a="aprovar">Aprovar</button>
       <div class="row"><button data-a="nova_versao">Pedir nova versão</button><button class="danger" data-a="recusar">Recusar</button></div></div>`;
   if (v.status === "ready_to_publish") acoes += `
-    <div class="card"><h3 style="margin-top:0">Publicar no TikTok</h3><ol class="steps">
+    <div class="card"><h3 style="margin-top:0">Ou publicar à mão pelo celular</h3><ol class="steps">
       <li>Salve o vídeo no celular:
         ${podeCompartilhar() ? `<button id="prep" class="primary">Preparar para compartilhar</button><button id="share" class="primary" style="display:none">Compartilhar vídeo</button>` : ""}
         <a class="btn${podeCompartilhar() ? "" : " primary"}" href="${src}?baixar=1" download="casa-pratica-${v.id}.mp4">Baixar MP4</a>
@@ -445,6 +479,19 @@ app.addEventListener("click", async (e) => {
   }
   const a = b.dataset.a; if (!a) return;
   if (a === "aprovar") { acao(a, id, { nota: nota() }, b); return; }
+  if (a === "programar") {
+    const q = document.getElementById("quando").value;
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(q)) { toast("Escolha data e hora."); return; }
+    if (Number(q.slice(14, 16)) % 5) { toast("Use minutos de 5 em 5 (00, 05, 10…)."); return; }
+    const [d, h] = q.split("T");
+    if (!confirm(`Aprovar e programar este vídeo no TikTok para ${d.split("-").reverse().join("/")} às ${h} (Brasília)?`)) return;
+    acao("agendar", id, { modo: "programar", quando: q }, b); return;
+  }
+  if (a === "agora") {
+    if (!confirm("Aprovar e publicar este vídeo no TikTok agora (na próxima sincronização)?")) return;
+    acao("agendar", id, { modo: "agora" }, b); return;
+  }
+  if (a === "cancelar_agendamento") { if (confirm("Cancelar o envio ao TikTok? O vídeo continua aprovado.")) acao(a, id, {}, b); return; }
   if (a === "recusar") { if (confirm("Recusar este vídeo? Ele sai da fila de publicação.")) acao(a, id, { nota: nota() }, b); return; }
   if (a === "nova_versao") { if (confirm("Pedir nova versão? O computador gera novo roteiro e nova renderização.")) acao(a, id, { nota: nota() }, b); return; }
   if (a === "publicado") {
