@@ -192,7 +192,7 @@ async function acao(request, env) {
   if (tipo === "metricas") {
     if (!["24h", "48h", "7d"].includes(d.janela)) return json({ erro: "Escolha 24 h, 48 h ou 7 dias." }, 400);
     dados.janela = d.janela;
-    for (const k of ["views", "avg_watch_s", "completion_pct", "shares", "saves", "profile_visits", "followers_attributed"]) {
+    for (const k of ["views", "avg_watch_s", "completion_pct", "shares", "saves", "profile_visits", "followers_attributed", "likes"]) {
       const n = cleanNum(d[k]);
       if (Number.isNaN(n)) return json({ erro: `Valor inválido em ${k}.` }, 400);
       dados[k] = n;

@@ -247,10 +247,10 @@ function telaDetalhe(id) {
       <h3>Registrar métricas</h3><div class="small">Copie do TikTok Studio. Deixe vazio o que não aparecer.</div>
       <label for="jan">Janela</label><select id="jan"><option value="24h">24 horas</option><option value="48h">48 horas</option><option value="7d">7 dias</option></select>
       ${[["views","Visualizações"],["avg_watch_s","Tempo médio (s)"],["completion_pct","Assistiram até o fim (%)"],["shares","Compartilhamentos"],
-         ["saves","Salvamentos"],["profile_visits","Visitas ao perfil"],["followers_attributed","Seguidores do vídeo"]]
+         ["saves","Salvamentos"],["likes","Curtidas"],["profile_visits","Visitas ao perfil"],["followers_attributed","Seguidores do vídeo"]]
         .map(([k, t]) => `<label for="m_${k}">${t}</label><input id="m_${k}" inputmode="decimal" autocomplete="off">`).join("")}
       <button class="primary" data-a="metricas">Salvar métricas</button>
-      ${Object.entries(v.metricas || {}).map(([j, m]) => `<div class="small" style="margin-top:8px">${j}: ${m.views ?? "—"} views, ${m.saves ?? "—"} salvos, ${m.shares ?? "—"} compart. (${quando(m.taken_at)})</div>`).join("")}
+      ${Object.entries(v.metricas || {}).map(([j, m]) => `<div class="small" style="margin-top:8px">${j}: ${m.views ?? "—"} views, ${m.likes ?? "—"} curtidas, ${m.followers_attributed ?? "—"} seguidores, ${m.saves ?? "—"} salvos, ${m.shares ?? "—"} compart. (${quando(m.taken_at)})</div>`).join("")}
     </div>`;
   if (v.status === "failed" || v.status === "blocked") acoes += `
     <div class="card">${v.erro ? `<div class="banner err">${esc(v.erro)}</div>` : ""}
@@ -453,7 +453,7 @@ app.addEventListener("click", async (e) => {
   }
   if (a === "metricas") {
     const d = { janela: document.getElementById("jan").value };
-    ["views","avg_watch_s","completion_pct","shares","saves","profile_visits","followers_attributed"].forEach(k => d[k] = document.getElementById("m_" + k).value.trim());
+    ["views","avg_watch_s","completion_pct","shares","saves","likes","profile_visits","followers_attributed"].forEach(k => d[k] = document.getElementById("m_" + k).value.trim());
     acao(a, id, d, b);
   }
 });
